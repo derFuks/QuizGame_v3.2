@@ -1,38 +1,39 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
-using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace QuizGame_v3
 {
     public partial class Form1 : Form
     {
         private List<Question> questions; // todo: подключить external DB
+        private HashSet<int> answeredQuestionIndices; // to avoid question repetitions
         private List<Badge> badges;
         private PlayerStats playerStats;
         private int currentQuestionIndex;
         private int score;
-        private int earnings;
+        // private int earnings;
         private int correctAnswersInARow;
         public Form1()
         {
             InitializeComponent();
-            this.Load += new System.EventHandler(this.Form1_Load);
+            // this.Load += new System.EventHandler(this.Form1_Load);
+            this.Load += Form1_Load; // trying easier syntax
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
             playerStats = new PlayerStats();
+            answeredQuestionIndices = new HashSet<int>();
             currentQuestionIndex = 0;
             score = 0;
-            earnings = 0;
+            // earnings = 0;
             correctAnswersInARow = 0;
+
             questions = new List<Question>() {
                 new Question("Which SQL statement is used to retrieve data from a database?", new[] { "UPDATE", "INSERT", "DELETE", "SELECT" }, 3),
                 new Question("What is the color of Ishan's car?", new[] { "White", "Black", "Blue", "Red" }, 3),
@@ -73,13 +74,13 @@ namespace QuizGame_v3
             };
 
 
-            ShuffleQuestions(); // todo: remember answered questions to avoid reapetitions
+            ShuffleQuestions(); // in progress: remember answered questions to avoid reapetitions
             DisplayQuestion();
         }
 
         private void DisplayQuestion()
         {
-            if (currentQuestionIndex < 6) // todo: end game if wring aswer given
+            if (currentQuestionIndex < questions.Count)
             {
                 var question = questions[currentQuestionIndex];
                 lblQuestion.Text = question.QuestionText;
@@ -90,14 +91,53 @@ namespace QuizGame_v3
             }
             else
             {
-                // disable btnOptions
-                btnOption1.Enabled = false;
-                btnOption2.Enabled = false;
-                btnOption3.Enabled = false;
-                btnOption4.Enabled = false;
+                EndGame();
             }
 
         }
+
+        private void CheckAnswer(int selectOptionsIndex)
+        {
+            var question = questions[currentQuestionIndex];
+            if (selectOptionsIndex == question.CorrectOptionIndex)
+            {
+                correctAnswersInARow++;
+                score++;
+                Console.WriteLine($"Correct Answers in a Row: {correctAnswersInARow}"); // Debugging
+                MessageBox.Show("Correct! Nice job!");
+
+                answeredQuestionIndices.Add(currentQuestionIndex);
+                MoveToNextQuestion();
+            } else
+            {
+                MessageBox.Show("Wrong answer! Game over.");
+                EndGame();
+            }
+        }
+
+        private void MoveToNextQuestion()
+        {
+            do
+            {
+                currentQuestionIndex++;
+            } while (answeredQuestionIndices.Contains(currentQuestionIndex) && currentQuestionIndex < questions.Count);
+            DisplayQuestion();
+        }
+
+        private void ShuffleQuestions()
+        {
+            Random random = new Random();
+            questions = questions.OrderBy(q => random.Next()).ToList();
+        }
+        private void EndGame()
+        {
+            lblQuestion.Text = "Game finished. Click 'Start Game' to play again.";
+            btnOption1.Enabled = false;
+            btnOption2.Enabled = false;
+            btnOption3.Enabled = false;
+            btnOption4.Enabled = false;
+        }
+
 
         private void btnOption1_Click(object sender, EventArgs e) => CheckAnswer(0);
 
@@ -107,96 +147,9 @@ namespace QuizGame_v3
 
         private void btnOption4_Click(object sender, EventArgs e) => CheckAnswer(3);
 
-        private void CheckAnswer(int selectOptionsIndex)
+       private void btnGameStart_Click(object sender, EventArgs e)
         {
-            var question = questions[currentQuestionIndex];
-            if (selectOptionsIndex == question.CorrectOptionIndex)
-            {
-                correctAnswersInARow++;
-                score += 1; // todo: make more complex logic
-                if (correctAnswersInARow > 4)
-                {
-                    earnings += 250;
-                }
-                else if (correctAnswersInARow > 6)
-                {
-                    earnings += 1000;
-                }
-                else
-                {
-                    earnings += 2000;
-                }
-
-
-                if (correctAnswersInARow == 7)
-                {
-                    MessageBox.Show($"You win $5000. Damn good!");
-                    UpdatePlayerStats(true, 5000);
-                    return;
-                }
-                currentQuestionIndex++;
-                DisplayQuestion();
-            }
-            else
-            {
-                MessageBox.Show($"Ouch.. Wrong answer. You can do better!! \nYour Total Score: {score}\nQuestions Answered Correctly: {correctAnswersInARow}");
-                lblQuestion.Text = "Game ended. Click 'Start Game' to play again!";
-                UpdatePlayerStats(false, 0);
-            }
-        }
-
-        private void UpdatePlayerStats(bool won, int earnings)
-        {
-            playerStats.TotalGamesPlayed++;
-            if (won)
-            {
-                playerStats.TotalGamesWon++;
-                playerStats.TotalEarnings += earnings;
-                playerStats.ConsecutiveLosses = 0;
-            }
-            else
-            {
-                playerStats.TotalGamesLost++;
-                playerStats.ConsecutiveLosses++;
-            }
-
-            // make badges earned=true
-            if (playerStats.TotalGamesPlayed == 1) badges.Find(b => b.Title == "Beginner").IsEarned = true;
-            if (playerStats.TotalGamesLost == 1) badges.Find(b => b.Title == "Looser").IsEarned = true;
-            if (playerStats.TotalGamesPlayed >= 3) badges.Find(b => b.Title == "Explorer").IsEarned = true;
-            if (playerStats.ConsecutiveLosses >= 3) badges.Find(b => b.Title == "Cyborg").IsEarned = true;
-            if (playerStats.TotalGamesPlayed >= 10) badges.Find(b => b.Title == "Maniac").IsEarned = true;
-            if (correctAnswersInARow >= 10) badges.Find(b => b.Title == "Cheater").IsEarned = true;
-
-
-            MessageBox.Show($"Stats are updated. Total Games Played: {playerStats.TotalGamesPlayed};\nTotal Earnings: {playerStats.TotalEarnings}");
-            lblQuestion.Text = "Game ended. Click 'Start Game' to play again!";
-        }
-
-        private void ShowBadges()
-        {
-            BadgeForm badgeForm = new BadgeForm();
-
-            foreach (var badge in badges)
-            {
-                if (badge.IsEarned)
-                {
-                    badgeForm.AddBadge(badge.ImagePath, badge.Title, badge.Description);
-                }
-            }
-
-            badgeForm.ShowDialog(); 
-        }
-
-        private void ShuffleQuestions() // todo: control random by difficulty lvls
-        {
-            Random random = new Random();
-            questions = questions.OrderBy(qst => random.Next()).ToList();
-        }
-
-        private void btnGameStart_Click(object sender, EventArgs e)
-        {
-            playerStats = new PlayerStats();
+            answeredQuestionIndices.Clear();
             currentQuestionIndex = 0;
             score = 0;
             correctAnswersInARow = 0;
@@ -204,29 +157,22 @@ namespace QuizGame_v3
             ShuffleQuestions();
             DisplayQuestion();
 
-            MessageBox.Show("New game started!");
-
             btnOption1.Enabled = true;
             btnOption2.Enabled = true;
             btnOption3.Enabled = true;
             btnOption4.Enabled = true;
-        }
 
+            Console.WriteLine("New game started");
+        }
         private void btnGameEnd_Click(object sender, EventArgs e)
         {
             var result = MessageBox.Show("Are you sure you want to end the game?", "End Game", MessageBoxButtons.YesNo);
             if (result == DialogResult.Yes)
             {
-                UpdatePlayerStats(false, earnings);
-                MessageBox.Show($"Game Over! \nYour Total Score: {score}\nQuestions Answered Correctly: {correctAnswersInARow}");
-
-                btnOption1.Enabled = false;
-                btnOption2.Enabled = false;
-                btnOption3.Enabled = false;
-                btnOption4.Enabled = false;
-
-                lblQuestion.Text = "Game ended. Click 'Start Game' to play again!";
+                Console.WriteLine("User clicked btnGameEnd_Click");
+                EndGame();
             }
         }
+
     }
 }
